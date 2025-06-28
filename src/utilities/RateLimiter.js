@@ -1,6 +1,7 @@
 import https from "https";
 import fs from "fs/promises";
 import crypto from "crypto";
+import AsyncFileWriter from "./AsyncFileWriter.js";
 
 class RateLimiter {
     constructor(nConcurrentRequests, eventHandler) {
@@ -42,6 +43,7 @@ class RateLimiter {
         }
 
         console.log("Start reqID:", reqID, "||", this.requests.get(reqID).count);
+        // console.log(this);
 
         const obj = this.pendingRequests.get(reqID);
         this.ongoingRequests.set(reqID, obj);
@@ -57,11 +59,13 @@ class RateLimiter {
         }
 
         if (saveToFile) {
-            obj.res.fileHandle = await fs.open(obj.fileOptions.pathname, "w");
+            // obj.res.file = await fs.open(obj.fileOptions.pathname, "w");
+            obj.res.fileWriter = new AsyncFileWriter(obj.fileOptions.pathname);
         } else {
             obj.res.buffers = [];
         }
 
+        // console.log("URL", obj.url);
         const httpsURL = new URL(obj.url);
 
         obj.req = https.request({
@@ -69,20 +73,20 @@ class RateLimiter {
             port: httpsURL.port,
             path: httpsURL.pathname + httpsURL.search,
             agent: self.httpsAgent,
-            method: obj.options.method,
+            method: obj?.options?.method || "GET",
             headers: {
-                ...obj.options.headers,
-                "Content-Length": obj.options.body ? Buffer.byteLength(obj.options.body) : 0,
+                ...obj.options?.headers,
+                "Content-Length": obj.options?.body ? Buffer.byteLength(obj.options.body) : 0,
             },
         });
 
-        if (obj.options.body) {
-            obj.req.write(obj.options.body);
+        if (obj.options?.body) {
+            obj.req.write(obj.options?.body);
         }
 
         obj.req.on("response", res => {
             obj.res.headers = res.headers;
-            console.log(res.headers);
+            // console.log(res.headers);
 
             obj.eventHandler && obj.eventHandler("response", obj);
             self.eventHandler && self.eventHandler("response", obj);
@@ -95,13 +99,16 @@ class RateLimiter {
                 obj.res.stats.contentLengthInBytes = res.headers["content-length"];
             }
 
-            res.on("error", function onError() {});
+            res.on("error", function onError() {
+                console.log("response error!!");
+            });
 
             res.on("data", function onDataReceived(chunk) {
                 obj.res.stats.totalDataReceivedInBytes += chunk.length;
 
                 if (saveToFile) {
-                    obj.res.fileHandle.writeFile(chunk);
+                    // obj.res.file.writeFile(chunk);
+                    obj.res.fileWriter.write(chunk);
                 } else {
                     obj.res.buffers.push(chunk);
                 }
@@ -118,7 +125,8 @@ class RateLimiter {
                 self.ongoingRequests.delete(reqID);
 
                 if (saveToFile) {
-                    obj.res.fileHandle.close();
+                    // obj.res.file.close();
+                    obj.res.fileWriter.close();
                 } else {
                     obj.res.buffer = Buffer.concat(obj.res.buffers);
                 }
@@ -130,6 +138,9 @@ class RateLimiter {
             });
         });
 
+        obj.req.on("error", err => {
+            console.log("\x1b[1;31m<Error>\x1b[m", err.message);
+        });
         obj.req.end();
     }
 
