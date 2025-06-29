@@ -62,7 +62,7 @@ class Queue {
     }
 
     pop() {
-        if (queue._front == null) {
+        if (this._front == null) {
             throw Error("Cannot pop from an empty queue.");
         }
 

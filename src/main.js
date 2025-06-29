@@ -6,15 +6,11 @@ import recurse from "./recurse.js";
 import download from "./download.js";
 import PersistentState from "./utilities/PersistentState.js";
 
-// const course = new PersistentState;
-
 (async function main() {
-    const course = new PersistentState(`out/${selectedCourseID}.json`, async () => {
-        return await getCourseContents();
-    });
-
-    filter(course);
-
-    fs.writeFileSync(outputCourseMapPathname, recurse(course), "utf8");
-    //     download(course);
+    const course = new PersistentState(`out/${selectedCourseID}.json`, getCourseContents);
+    const courseObj = await course.getStateObj();
+    filter(courseObj);
+    fs.writeFileSync(outputCourseMapPathname, recurse(courseObj), "utf8");
+    await course.close();
+    download(courseObj);
 })();

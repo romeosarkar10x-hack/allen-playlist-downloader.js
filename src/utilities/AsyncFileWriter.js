@@ -22,12 +22,25 @@ class AsyncFileWriter {
     async _write(chunk, awaitFor) {
         await this._initialize;
         await awaitFor;
-        await this.file.write(chunk);
+
+        let numBytesToWrite = chunk.length;
+
+        while (numBytesToWrite) {
+            const { bytesWritten } = await this.file.write(chunk);
+            numBytesToWrite -= bytesWritten;
+        }
     }
 
     async write(chunk) {
         this._writes.push(this._write(chunk, this._writes.back()));
         await this._writes.back();
+    }
+
+    async abort() {
+        await this._writes.back();
+        await this.file.truncate(0);
+        await this.file.close();
+        await fs.unlink(this.pathname);
     }
 
     async close() {
@@ -51,7 +64,8 @@ class AsyncFileWriter {
     asyncFileWriter.write("8!\n");
     asyncFileWriter.write("9!\n");
 
-    await asyncFileWriter.close();
+    await asyncFileWriter.abort();
+
     console.log("Done!");
 })();
 */

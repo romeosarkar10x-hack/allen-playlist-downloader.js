@@ -1,4 +1,4 @@
-import { url, batchID, selectedBatchList, selectedCourseID, stream, taxonomyID } from "./config.js";
+import { uri, batchID, selectedBatchList, selectedCourseID, stream, taxonomyID } from "./config.js";
 import RateLimiter from "./utilities/RateLimiter.js";
 // const subject_id = "2"; // 354 for Physics, 152 for Maths, 2 for Chemistry
 
@@ -23,4 +23,4 @@ const headers = {
 
 const rateLimiter = new RateLimiter(1);
 
-export { url, batchID, selectedBatchList, selectedCourseID, stream, taxonomyID, commonParams, headers, rateLimiter };
+export { uri, batchID, selectedBatchList, selectedCourseID, stream, taxonomyID, commonParams, headers, rateLimiter };

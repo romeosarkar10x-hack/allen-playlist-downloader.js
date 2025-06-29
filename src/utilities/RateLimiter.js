@@ -28,6 +28,8 @@ class RateLimiter {
             obj.reject = reject;
         });
 
+        obj.promise.catch(_ => {});
+
         this.promises.set(reqID, obj);
     }
 
@@ -42,7 +44,7 @@ class RateLimiter {
             reqID = self.pendingRequests.keys().next().value;
         }
 
-        console.log("Start reqID:", reqID, "||", this.requests.get(reqID).count);
+        // console.log("Start reqID:", reqID, "||", this.requests.get(reqID).count);
         // console.log(this);
 
         const obj = this.pendingRequests.get(reqID);
@@ -60,13 +62,13 @@ class RateLimiter {
 
         if (saveToFile) {
             // obj.res.file = await fs.open(obj.fileOptions.pathname, "w");
-            obj.res.fileWriter = new AsyncFileWriter(obj.fileOptions.pathname);
+            obj.res.asyncFileWriter = new AsyncFileWriter(obj.fileOptions.pathname);
         } else {
             obj.res.buffers = [];
         }
 
-        // console.log("URL", obj.url);
-        const httpsURL = new URL(obj.url);
+        // console.log("URL", obj.uri);
+        const httpsURL = new URL(obj.uri);
 
         obj.req = https.request({
             hostname: httpsURL.hostname,
@@ -86,6 +88,7 @@ class RateLimiter {
 
         obj.req.on("response", res => {
             obj.res.headers = res.headers;
+            obj.res.statusCode = res.statusCode;
             // console.log(res.headers);
 
             obj.eventHandler && obj.eventHandler("response", obj);
@@ -100,7 +103,8 @@ class RateLimiter {
             }
 
             res.on("error", function onError() {
-                console.log("response error!!");
+                console.log("Response error!!");
+                console.log("Unhandled path!");
             });
 
             res.on("data", function onDataReceived(chunk) {
@@ -108,7 +112,7 @@ class RateLimiter {
 
                 if (saveToFile) {
                     // obj.res.file.writeFile(chunk);
-                    obj.res.fileWriter.write(chunk);
+                    obj.res.asyncFileWriter.write(chunk);
                 } else {
                     obj.res.buffers.push(chunk);
                 }
@@ -126,14 +130,18 @@ class RateLimiter {
 
                 if (saveToFile) {
                     // obj.res.file.close();
-                    obj.res.fileWriter.close();
+                    obj.res.asyncFileWriter.close();
                 } else {
                     obj.res.buffer = Buffer.concat(obj.res.buffers);
                 }
 
-                self.promises.get(reqID).resolve(obj.res);
+                if (400 <= res.statusCode && res.statusCode < 600) {
+                    self.promises.get(reqID).reject(obj.res);
+                } else {
+                    self.promises.get(reqID).resolve(obj.res);
+                }
 
-                console.log("End reqID:", reqID, "||", self.requests.get(reqID).count);
+                // console.log("End reqID:", reqID, "||", self.requests.get(reqID).count);
                 self._startRequest();
             });
         });
@@ -144,7 +152,7 @@ class RateLimiter {
         obj.req.end();
     }
 
-    request(url, options, fileOptions, reqID, eventHandler) {
+    request(uri, options, fileOptions, reqID, eventHandler) {
         if (reqID == null) {
             reqID = crypto.randomUUID();
         }
@@ -155,7 +163,8 @@ class RateLimiter {
             isActive: false,
             options,
             fileOptions,
-            url,
+            uri,
+            date: new Date(),
             eventHandler,
         });
 
@@ -179,10 +188,32 @@ class RateLimiter {
     }
 
     async done() {
+        console.log("Done for RateLimiter called!");
         while (this.pendingRequests.size) {
-            await this.get(this.ongoingRequests.keys().next().value);
+            // await this.get(this.ongoingRequests.keys().next().value);
+            try {
+                await this.promises.get(this.ongoingRequests.keys().next()).promise;
+            } catch (err) {
+                console.log("hurray! caught promise!");
+            }
         }
     }
 }
+
+/*
+(async function test() {
+    const rateLimiter = new RateLimiter();
+    const reqID = rateLimiter.request(
+        "https://content.allen.in/fd68b7ad-13e9-4275-9e75-02bcd06fa090/transcodedVideos/ALLEN/transcoded_video_x264_5000k_HD?hdnts=exp=1751184548~acl=*fd68b7ad-13e9-4275-9e75-02bcd06fa090*~hmac=39b1b4f5372c722471677e2fa894fe49057f70430169d952f7d4b8578c32eefb",
+    );
+
+    try {
+        await rateLimiter.getResponse(reqID);
+    } catch (err) {
+        console.log("Response error!");
+        console.log(err.buffer.toString());
+    }
+})();
+*/
 
 export default RateLimiter;

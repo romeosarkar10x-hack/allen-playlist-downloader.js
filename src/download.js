@@ -1,8 +1,12 @@
 import fs from "fs";
-import { outputCourseDirPathname } from "./config.js";
+import { outputDirPathname, selectedCourseID } from "./config.js";
 import { rateLimiter } from "./globals.js";
+import PersistentState from "./utilities/PersistentState.js";
 
-const metadataFilePathname = `${outputCourseDirPathname}/metadata.json`;
+const metadataFilePathname = `${outputDirPathname}/metadata.json`;
+const downloadsMetadataState = new PersistentState(metadataFilePathname);
+
+/*
 let downloads = new Map();
 
 try {
@@ -29,17 +33,33 @@ function saveMetadata() {
     fs.writeFileSync(metadataFilePathname, metadata, "utf8");
 }
 
+*/
 function callbackOnDownloadCompleted(event, obj) {
     if (event == "end") {
-        // console.log("callbackOnDownloadCompleted", obj);
-        console.log(`Downloaded \`${obj.reqID}\`!`);
-        downloads.set(obj.reqID, true);
-        saveMetadata();
+        if (400 <= obj.res.statusCode && obj.res.statusCode < 600) {
+            console.log(`Failed to download \`${obj.reqID}\``);
+        } else {
+            // console.log("callbackOnDownloadCompleted", obj);
+            console.log(`Downloaded \`${obj.reqID}\`!`);
+            const reqID = obj.reqID;
+            // downloads.set(obj.reqID, true);
+            downloadsMetadataState.setStateObj(obj => {
+                // console.log("callback for setState!", obj);
+                const newState = {
+                    ...obj,
+                };
+                // console.log("Obj.reqID:", reqID);
+                newState[reqID] = true;
+                // console.log("newState", newState);
+                return newState;
+            });
+            // saveMetadata();
+        }
     }
 }
 
 export default function download(course) {
-    function downloadRecursively(node, pathname) {
+    async function downloadRecursively(node, pathname) {
         try {
             if (!fs.existsSync(pathname)) {
                 fs.mkdirSync(pathname);
@@ -58,7 +78,7 @@ export default function download(course) {
 
         const filePathname = pathname + "/" + node.title + ".mp4";
 
-        if (!downloads.has(filePathname)) {
+        if (!(await downloadsMetadataState.getStateObj())[filePathname]) {
             rateLimiter.request(
                 node.uri,
                 null,
@@ -73,5 +93,5 @@ export default function download(course) {
         }
     }
 
-    downloadRecursively(course, outputCourseDirPathname);
+    downloadRecursively(course, outputDirPathname);
 }

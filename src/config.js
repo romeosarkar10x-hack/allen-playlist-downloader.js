@@ -1,7 +1,7 @@
 import "dotenv/config";
 import fs from "fs";
 
-const url = "https://api.allen-live.in/api/v1/pages/getPage";
+const uri = "https://api.allen-live.in/api/v1/pages/getPage";
 const batchID = ["bt_B8pZxUP9RdEsaiKZNddiH"];
 const selectedBatchList = ["bt_B8pZxUP9RdEsaiKZNddiH"];
 const selectedCourseID = "course_bxMhJk4o1MGkEp3CKKAad";
@@ -15,20 +15,22 @@ const subjects = [
 ];
 
 const outputDirPathname = "./out";
-const outputCourseMapPathname = `${outputDirPathname}/${selectedCourseID}.txt`;
-const outputCourseDirPathname = `${outputDirPathname}/${selectedCourseID}`;
+const outputCourseMapPathname = `${outputDirPathname}/${selectedCourseID}.map`;
+// const outputCourseDirPathname = `${outputDirPathname}/${selectedCourseID}`;
 
 if (!fs.existsSync(outputDirPathname)) {
     fs.mkdirSync(outputDirPathname);
 }
 
+/*
 if (!fs.existsSync(outputCourseDirPathname)) {
     fs.mkdirSync(outputCourseDirPathname);
 }
+    */
 
 export {
     subjects,
-    url,
+    uri,
     batchID,
     selectedBatchList,
     selectedCourseID,
@@ -36,5 +38,4 @@ export {
     taxonomyID,
     outputCourseMapPathname,
     outputDirPathname,
-    outputCourseDirPathname,
 };

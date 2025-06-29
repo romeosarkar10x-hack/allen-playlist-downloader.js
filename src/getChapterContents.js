@@ -1,4 +1,4 @@
-import { url, headers, commonParams } from "./globals.js";
+import { uri, headers, commonParams } from "./globals.js";
 import { rateLimiter } from "./globals.js";
 
 export default async function getChapterContents({ topicID, subjectID }) {
@@ -11,14 +11,14 @@ export default async function getChapterContents({ topicID, subjectID }) {
     });
 
     /*
-    const res = await fetch(url, {
+    const res = await fetch(uri, {
         headers,
         method: "POST",
         body,
     });
     */
 
-    const reqID = rateLimiter.request(url, {
+    const reqID = rateLimiter.request(uri, {
         headers,
         method: "POST",
         body,

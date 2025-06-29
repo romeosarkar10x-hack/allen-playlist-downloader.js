@@ -1,94 +1,157 @@
 import fs from "fs/promises";
-import AsyncFileWriter from "./AsyncFileWriter.js";
 
 class PersistentState {
-    constructor(pathname, resolver) {
+    constructor(
+        pathname,
+        resolver = async () => {
+            return {};
+        },
+    ) {
         this.pathname = pathname;
         this.promises = [];
 
         const self = this;
 
-        async function initialize() {
-            try {
-                let data;
-
+        this.promises.push(
+            (async function initialize() {
+                /* Open file */
                 try {
-                    data = await fs.readFile(pathname);
+                    await self._openFile();
                 } catch (err) {
-                    console.log(`Failed to read file \`${pathname}\` [ ${err.message} ]`);
+                    console.log(`Failed to open file \`${pathname}\` [ ${err.message} ] for reading/writing`);
                     throw err;
                 }
 
+                /* Parse state */
                 try {
-                    self.state = JSON.parse(data);
-                    console.log("Restored state:", self.state);
+                    self.state = JSON.parse(await self._readFile());
+                    // console.log("parsed state:", self.state);
                 } catch (err) {
                     console.log(`Failed to parse file \`${pathname}\` [ ${err.message} ]`);
-                    throw err;
+                    console.log(`Error restoring state from file \`${pathname}\``);
+
+                    /* Fallback to default state */
+                    self.state = await resolver();
+                    // console.log("state:", self.state);
+
+                    try {
+                        await self._writeFile(self.state);
+                    } catch (err) {
+                        console.log(`Error opening file \`${pathname}\` for writing`);
+                        console.log(err);
+                    }
                 }
-            } catch (err) {
-                console.log(`Error restoring state from file \`${pathname}\``);
-                // self.state = defaultStateObj;
-                self.state = await resolver();
-            }
+            })(),
+        );
 
-            try {
-                self.file = await fs.open(pathname, "w");
-            } catch (err) {
-                console.log(`Error opening file \`${pathname}\` for writing`);
-            }
-        }
-
-        this.initialize = initialize();
+        // this.promises.push(initialize());
     }
 
     async getStateObj() {
-        await this.initialize;
+        await this.promises[0];
         return this.state;
     }
 
-    async _write(obj, awaitFor) {
-        if (awaitFor != null) {
-            await awaitFor;
-            await this.file.truncate(0);
-        }
-
-        await this.file.write(JSON.stringify(obj), 0);
+    _stringify(obj) {
+        return JSON.stringify(obj, null, 4);
     }
 
-    async setStateObj(obj) {
-        await this.initialize;
-        this.state = obj;
+    async _openFile() {
+        try {
+            this._fileHandle = await fs.open(this.pathname, "r+");
+        } catch (err) {
+            console.log(`Failed to open file \`${this.pathname}\` for reading/writing`);
+            try {
+                this._fileHandle = await fs.open(this.pathname, "w");
+            } catch (err) {
+                console.log(`Failed to open file \`${this.pathname}\` for writing`);
+                throw err;
+            }
+        }
+    }
 
-        if (this.file == null) {
+    async _readFile() {
+        return await this._fileHandle.readFile({ encoding: "utf8" });
+    }
+
+    async _writeFile(obj, awaitFor) {
+        await awaitFor;
+
+        if (this._fileHandle == null) {
             console.log("Error saving `state` to file; File is not open for writing");
             throw Error("File is not open for writing");
         }
 
+        if (awaitFor != null) {
+            await this._fileHandle.truncate(0);
+        }
+
+        await this._fileHandle.write(this._stringify(obj), 0);
+    }
+
+    async setStateObj(arg) {
+        if (this.closed) {
+            throw Error("File has been closed");
+        }
+
+        if (typeof arg == "function") {
+            // console.log("setStateObj this.state:", this.state);
+            this.state = await arg(this.state);
+            // console.log("Function!!", this.state);
+        } else {
+            this.state = arg;
+        }
+
         try {
-            this.promises.push(this._write(obj, this.promises.at(-1)));
+            this.promises.push(this._writeFile(this.state, this.promises.at(-1)));
             await this.promises.at(-1);
         } catch (err) {
-            console.log("Error settings state");
+            console.log("Error setting state");
             throw err;
         }
     }
+
+    async close() {
+        if (!this._fileHandle) {
+            return;
+        }
+
+        await this.promises.at(-1);
+
+        delete this.pathname;
+        delete this.promises;
+
+        await this._fileHandle.close();
+
+        delete this._fileHandle;
+
+        this.closed = true;
+    }
 }
 
-const obj = { message: "Hello world!", date: new Date().toLocaleString(), count: 2 };
-const persistentState = new PersistentState("obj");
+/*
+const persistentState = new PersistentState("obj", () => {
+    return { message: "Hello world!", date: new Date().toLocaleString(), count: 2 };
+});
 
-persistentState.setStateObj(obj);
-persistentState.setStateObj({ message: "Hello gadha!" });
 persistentState.setStateObj({ count: 8 });
+persistentState.setStateObj(obj => {
+    return {
+        ...obj,
+        message: "Hello world!",
+    };
+});
+*/
+
+/*
+persistentState.setStateObj({ message: "Hello gadha!" });
 persistentState.setStateObj({ count: 9 });
 persistentState.setStateObj({ count: 10 });
 persistentState.setStateObj({ count: 11 });
 persistentState.setStateObj({ count: 12 });
-persistentState.setStateObj(obj);
 persistentState.setStateObj({ count: 13 });
 persistentState.setStateObj({ count: 14 });
-
-persistentState.setStateObj({ count: 15 });
+persistentState.setStateObj({ count: new Date().toLocaleString() });
+*/
 
 export default PersistentState;
